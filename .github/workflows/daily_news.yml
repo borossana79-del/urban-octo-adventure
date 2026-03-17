@@ -1,0 +1,29 @@
+name: Daily Tech News Scraper
+
+on:
+  schedule:
+    # 每天北京时间 08:00 运行 (对应 UTC 00:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动触发测试
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install requests
+
+    - name: Run scraper and send notification
+      env:
+        SERVER_CHAN_SENDKEY: ${{ secrets.SERVER_CHAN_SENDKEY }}
+      run: python news_scraper.py
