@@ -1,44 +1,55 @@
 import requests
 import datetime
 import os
+import feedparser
 
-def fetch_tech_news():
-    # 示例：抓取 Hacker News 的 Top Stories
-    # 你也可以替换为 36Kr RSS (https://36kr.com/feed) 或其他 API
-    api_url = "https://hacker-news.firebaseio.com/v0/topstories.json"
-    item_url = "https://hacker-news.firebaseio.com/v0/item/{}.json"
+def fetch_ai_news():
+    # 定义新闻源 (RSS 链接)
+    sources = {
+        "机器之心 (Synced)": "https://www.syncedreview.com/feed/",
+        "36Kr - 人工智能": "https://36kr.com/feed-category/37",
+        "ArXiv - AI 论文": "http://rss.arxiv.org/rss/cs.AI",
+        "TechCrunch - AI": "https://techcrunch.com/category/artificial-intelligence/feed/"
+    }
     
-    response = requests.get(api_url)
-    story_ids = response.json()[:15]  # 取前15条
-    
-    news_list = []
+    news_items = []
     now = datetime.datetime.now(datetime.timezone.utc)
     
-    for sid in story_ids:
-        item = requests.get(item_url.format(sid)).json()
-        # 转换发布时间，仅保留过去24小时内的
-        pub_time = datetime.datetime.fromtimestamp(item.get('time', 0), datetime.timezone.utc)
-        if (now - pub_time).total_seconds() < 86400:
-            title = item.get('title')
-            link = item.get('url', f"https://news.ycombinator.com/item?id={sid}")
-            news_list.append(f"- **{title}** \n  [阅读全文]({link})")
-            
-    return "\n\n".join(news_list)
+    for name, url in sources.items():
+        print(f"正在抓取: {name}...")
+        try:
+            feed = feedparser.parse(url)
+            count = 0
+            for entry in feed.entries:
+                # 只取过去 24 小时的新闻
+                # 某些 RSS 源的日期格式不一，这里做简单兼容处理
+                pub_time = None
+                if hasattr(entry, 'published_parsed'):
+                    pub_time = datetime.datetime(*entry.published_parsed[:6], tzinfo=datetime.timezone.utc)
+                
+                if pub_time and (now - pub_time).total_seconds() < 86400:
+                    title = entry.title
+                    link = entry.link
+                    news_items.append(f"### [{name}] {title}\n🔗 [点击阅读]({link})")
+                    count += 1
+                
+                if count >= 5: break # 每个源最多取 5 条，防止消息太长
+        except Exception as e:
+            print(f"抓取 {name} 失败: {e}")
+
+    return "\n\n---\n\n".join(news_items)
 
 def send_to_wechat(content):
     send_key = os.getenv("SERVER_CHAN_SENDKEY")
-    if not send_key:
-        print("Error: SERVER_CHAN_SENDKEY not found.")
-        return
+    if not send_key: return
 
     url = f"https://sctapi.ftqq.com/{send_key}.send"
     data = {
-        "title": f"今日科技资讯 - {datetime.date.today()}",
-        "desp": content if content else "今日暂无重大科技更新。"
+        "title": f"🤖 AI 深度资讯 - {datetime.date.today()}",
+        "desp": content if content else "过去 24 小时暂无关注的 AI 动态。"
     }
-    res = requests.post(url, data=data)
-    print(f"推送状态: {res.status_code}, 响应: {res.text}")
+    requests.post(url, data=data)
 
 if __name__ == "__main__":
-    content = fetch_tech_news()
-    send_to_wechat(content)
+    ai_content = fetch_ai_news()
+    send_to_wechat(ai_content)
