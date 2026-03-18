@@ -21,7 +21,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install requests feedparser
+        pip install requests feedparser beautifulsoup4 deep_translator
 
     - name: Run scraper and send notification
       env:
